@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type Ref } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FrostGrowth } from "./frost";
 import { sfx, wake } from "./sound";
-import { DistortionWave } from "distortion-waves";
+import { DistortionWave, type DistortionWaveHandle } from "distortion-waves";
 
 /* ---------- springs: SwiftUI-style (response, bounce), same as the envelope in convert-card ---------- */
 class Spring {
@@ -15,7 +15,7 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 const CARD = `${import.meta.env.BASE_URL}card.webp`;
 const GATHER = .25;
-const FREEZE_STYLE = { particleCount: 40, pull: 0, inhale: 0, anticipation: GATHER, travel: 2.2 };
+const FREEZE_STYLE = { particleCount: 28, pull: 0, inhale: 0, anticipation: GATHER, travel: 1.7 };
 /* running back, the colour that lingers on the edges after a freeze would come first and read as the
    edges thawing before the wave gets there: no rim or hairline on the way back */
 const THAW_STYLE = { ...FREEZE_STYLE, rimStrength: 0, hairlineOpacity: 0, returnSpeed: 1 };   // the wave's anticipation (waveStyle below), in seconds: a short, sharp gather
@@ -90,6 +90,19 @@ function useCardMotion(frozen: boolean) {
   return api;
 }
 
+/* The card tilts in 3D, and the wave sizes its picture from getBoundingClientRect, which is the tilted
+   card's footprint on screen: with the card leaning toward the button it is ~1.3% shorter than the card
+   really is, so the picture came out squashed and the logo jumped when the real card took over at the
+   end. Here the wave is given the card's true size, centred where the card shows on screen. */
+function measureFlat(el: HTMLElement | null) {
+  if (!el) return;
+  const screen = Element.prototype.getBoundingClientRect;
+  el.getBoundingClientRect = function () {
+    const r = screen.call(this), w = this.offsetWidth, h = this.offsetHeight;
+    return new DOMRect(r.left + r.width / 2 - w / 2, r.top + r.height / 2 - h / 2, w, h);
+  };
+}
+
 /* the frost canvas: sized to the card at screen resolution, it grows each time the card freezes.
    data-dw-live lets the wave read it every frame, so the ice is already creeping in under the lens */
 function Frost({ frozen }: { frozen: boolean }) {
@@ -97,6 +110,7 @@ function Frost({ frozen }: { frozen: boolean }) {
   const was = useRef(frozen);
   useEffect(() => {
     const cv = ref.current!, g = growth.current = new FrostGrowth(cv);
+    measureFlat(cv);   // the wave reads this canvas every frame and lays it over its own measure of the card
     const ro = new ResizeObserver(() => {
       const d = Math.min(3, devicePixelRatio || 1), w = Math.round(cv.clientWidth * d), h = Math.round(cv.clientHeight * d);
       if (!w || (cv.width === w && cv.height === h)) return;
@@ -112,11 +126,9 @@ function Frost({ frozen }: { frozen: boolean }) {
   return <canvas ref={ref} className="frost" data-dw-live aria-hidden="true" />;
 }
 
-const Face = ({ cold, frozen = false, chip }: { cold?: boolean; frozen?: boolean; chip?: Ref<HTMLElement> }) => (
+const Face = ({ cold, frozen = false}: { cold?: boolean; frozen?: boolean }) => (
   <div className={`face${cold ? " ice" : ""}`}>
     <img src={CARD} alt="" draggable={false} />
-    {/* an invisible mark laid exactly over the chip in the art: the wave opens from here */}
-    <i className="chip-spot" ref={chip} />
     {cold && <><i className="chill" /><Frost frozen={frozen} /></>}
     <i className="holo" /><i className="glare" /><i className="sheen" />
   </div>
@@ -124,7 +136,8 @@ const Face = ({ cold, frozen = false, chip }: { cold?: boolean; frozen?: boolean
 
 export function App() {
   const [frozen, setFrozen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null), chip = useRef<HTMLElement>(null);
+  const button = useRef<HTMLButtonElement>(null), wave = useRef<DistortionWaveHandle>(null);
+  useEffect(() => measureFlat(wave.current?.element ?? null), []);
   const motion = useCardMotion(frozen);
 
   const toggle = () => {
@@ -143,20 +156,20 @@ export function App() {
           <i className="side l" /><i className="side r" /><i className="side t" /><i className="side b" />
           <div className="skin back" />
           {/* the wave runs on the face alone, inside its rounded corners. Its lens bends a picture of the
-              card from the warm face into the frozen one, as a ring out of the chip (type center, the chip held
-              sharp); revealed=false runs it back into the chip.
+              card from the warm face into the frozen one, up from the button; revealed=false runs it back down into it.
               pull/inhale off: they drag the picture toward the source and tear its top edge.
               Thaw switches to the warm palette: a thaw, not more cold */}
           <DistortionWave
+            ref={wave}
             className="skin front"
             revealed={frozen}
-            source={chip}
-            type="center"
+            source={button}
+            type="vertical"
             palette={frozen ? "ocean" : "sunset"}
             waveStyle={frozen ? FREEZE_STYLE : THAW_STYLE}
             revealedContent={<Face cold frozen={frozen} />}
           >
-            <Face chip={chip} />
+            <Face />
           </DistortionWave>
         </div>
       </div>

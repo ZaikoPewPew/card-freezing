@@ -39,8 +39,6 @@ body{overflow:hidden;color:var(--ink);font-family:-apple-system,"SF Pro Text",sy
 .cold .side,.cold .skin.back{background:#8ea6c1}
 
 /* each face is opaque, as the wave needs: the corners the PNG leaves clear are filled with its own colour */
-/* the chip's place in the art (571,195 to 736,422 on the 1118x1781 PNG) */
-.chip-spot{position:absolute;left:51.07%;top:10.95%;width:14.76%;height:12.75%;pointer-events:none}
 .face{position:relative;width:100%;height:100%;overflow:hidden;border-radius:var(--r);background:#e5432f}
 .face.ice{background:#8ea6c1}
 .face img{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
