@@ -78,6 +78,7 @@ function voices(ctx: AudioContext) {
 
   return {
     ctx,
+    mute(off: boolean) { master.gain.setTargetAtTime(off ? 0 : VOLUME, now(), .015); },
     freeze() { play(iceBuffer(3.2, "freeze"), .3); },
     thaw() { play(iceBuffer(1.8, "thaw"), .3, .8); air({ at: now() + .4, type: "lowpass", from: 260, to: 700, Q: .3, gain: .03, attack: .5, dur: 1.2, send: .3 }); },
     // the push as the card springs up: a short, low, dull thud of noise
@@ -91,12 +92,22 @@ function voices(ctx: AudioContext) {
 type Voices = ReturnType<typeof voices>;
 let v: Voices | undefined;
 
+/* the mute switch, remembered across visits like the envelope's */
+const KEY = "card-freezing-muted";
+let muted = false;
+try { muted = localStorage.getItem(KEY) === "1"; } catch { /* private mode: start with sound */ }
+export const isMuted = () => muted;
+export function setMuted(off: boolean) {
+  muted = off; v?.mute(off);
+  try { localStorage.setItem(KEY, off ? "1" : "0"); } catch { /* not remembered, still applied */ }
+}
+
 /* audio can only start from a gesture: the first press anywhere wakes it */
 export function wake() {
   if (v) { if (v.ctx.state === "suspended") v.ctx.resume(); return; }
   try {
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    v = voices(new Ctx()); v.ctx.resume();
+    v = voices(new Ctx()); v.mute(muted); v.ctx.resume();
   } catch { v = undefined; }
 }
 

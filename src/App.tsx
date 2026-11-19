@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { FrostGrowth } from "./frost";
-import { sfx, wake } from "./sound";
+import { isMuted, setMuted, sfx, wake } from "./sound";
 import { DistortionWave, type DistortionWaveHandle } from "distortion-waves";
 
 /* ---------- springs: SwiftUI-style (response, bounce), same as the envelope in convert-card ---------- */
@@ -11,14 +11,20 @@ class Spring {
   step(h: number) { this.v += (this.k * (this.to - this.x) - this.c * this.v) * h; this.x += this.v * h; }
 }
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
-const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 const CARD = `${import.meta.env.BASE_URL}card.webp`;
 const GATHER = .25;
 const FREEZE_STYLE = { particleCount: 28, pull: 0, inhale: 0, anticipation: GATHER, travel: 1.7 };
 /* running back, the colour that lingers on the edges after a freeze would come first and read as the
    edges thawing before the wave gets there: no rim or hairline on the way back */
-const THAW_STYLE = { ...FREEZE_STYLE, rimStrength: 0, hairlineOpacity: 0, returnSpeed: 1 };   // the wave's anticipation (waveStyle below), in seconds: a short, sharp gather
+/* Thaw is the freeze played backwards, but not with the wave's own reverse: a freeze reaches the top of the
+   card by 0.7s and spends the rest of its run letting the lens settle, so played back the first ~0.4s barely
+   moves. Instead the thaw scrubs the same run back by hand, starting with the front just above the card
+   (THAW_FROM, read off the wave's own front: it re-enters the card at ~0.21) and ending in the button. No rim on the way back: the colour that
+   lingers on the edges after a freeze would come first and read as the edges thawing ahead of the wave */
+const THAW_STYLE = { ...FREEZE_STYLE, rimStrength: 0, hairlineOpacity: 0 };
+const THAW_FROM = .26, THAW_MS = 1100;
+const ease = (u: number) => 1 - (1 - u) ** 1.6;   // moving from the first frame, settling into the button
 
 /* both views hold a copy of the card; one loop moves them together, so the wave never shows a jump */
 function useCardMotion(frozen: boolean) {
@@ -30,7 +36,7 @@ function useCardMotion(frozen: boolean) {
     const P = { x: new Spring(0, .7, .28), y: new Spring(0, .7, .28), rx: new Spring(0, .7, .28), ry: new Spring(0, .7, .28), rz: new Spring(0, .7, .28) };
     const squeeze = new Spring(0, .3, .45);
     const pointer = { x: innerWidth / 2, y: innerHeight / 2, in: false };
-    let t = 0, last = performance.now(), nudgeAt = 5, held = false, gather = 0, raf = 0;
+    let t = 0, last = performance.now(), held = false, gather = 0, raf = 0;
     if (!reduce) { P.x.x = innerWidth * .62; P.y.x = -50; P.ry.x = -200; P.rz.x = 16; }   // flies in from the right, spinning round to its front
     addEventListener("pointerdown", wake, true); addEventListener("keydown", wake, true);
 
@@ -58,7 +64,6 @@ function useCardMotion(frozen: boolean) {
       P.y.to = Math.sin(t * 1.4) * 7 * motion;
       P.ry.to = nx * 22 * tilt; P.rx.to = -ny * 16 * tilt - squeeze.x * 6;
       P.rz.to = Math.sin(t * .9) * 1.6 * motion;
-      if (!cold && !held && motion && t > nudgeAt) { P.rz.v += (Math.random() < .5 ? -1 : 1) * 70; nudgeAt = t + rand(4, 7); }   // left alone it wiggles
 
       const n = Math.ceil(dt * 240), h = dt / n;
       for (let i = 0; i < n; i++) { for (const s of Object.values(P)) s.step(h); squeeze.step(h); }
@@ -136,15 +141,26 @@ const Face = ({ cold, frozen = false}: { cold?: boolean; frozen?: boolean }) => 
 
 export function App() {
   const [frozen, setFrozen] = useState(false);
+  const [muted, mute] = useState(isMuted);
   const button = useRef<HTMLButtonElement>(null), wave = useRef<DistortionWaveHandle>(null);
   useEffect(() => measureFlat(wave.current?.element ?? null), []);
   const motion = useCardMotion(frozen);
 
+  const [scrub, setScrub] = useState<number | null>(null), thaw = useRef(0);
   const toggle = () => {
     const next = !frozen;
+    cancelAnimationFrame(thaw.current);
     motion.current.kick(next);
     sfx[next ? "freeze" : "thaw"]();
     setFrozen(next);
+    if (next) { setScrub(null); return; }
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const u = Math.min(1, (now - t0) / THAW_MS);
+      if (u < 1) { setScrub(THAW_FROM * (1 - ease(u))); thaw.current = requestAnimationFrame(step); }
+      else setScrub(null);   // at 0 the warm face is all that shows: let go of the scrub and settle on it
+    };
+    setScrub(THAW_FROM); thaw.current = requestAnimationFrame(step);
   };
 
   return (
@@ -162,7 +178,8 @@ export function App() {
           <DistortionWave
             ref={wave}
             className="skin front"
-            revealed={frozen}
+            revealed={frozen || scrub !== null}
+            scrub={scrub}
             source={button}
             type="vertical"
             palette={frozen ? "ocean" : "sunset"}
@@ -173,6 +190,9 @@ export function App() {
           </DistortionWave>
         </div>
       </div>
+      <button type="button" className="mute" aria-label="Звук" aria-pressed={muted} onClick={() => { setMuted(!muted); mute(!muted); }}>
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 9.5v5h3.5l4.5 4v-13l-4.5 4z" fill="currentColor" /><g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">{muted ? <path d="m15.5 9.5 5 5m0-5-5 5" /> : <><path d="M15.5 9.2a4 4 0 0 1 0 5.6" /><path d="M18.2 6.8a7.5 7.5 0 0 1 0 10.4" /></>}</g></svg>
+      </button>
       <button ref={button} type="button" className="action" onClick={toggle} aria-pressed={frozen}>
         {frozen ? "Разморозить карту" : "Заморозить карту"}
       </button>
