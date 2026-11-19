@@ -1,6 +1,6 @@
-/* All synthesised, built on the envelope's voices in convert-card. Freeze is ice taking hold:
-   a fizz of crystallisation, the creak of ice tightening, the "pew" a frozen lake sings under
-   tension and a thin glass ping as it closes. Thaw is quiet: the ice loosening, a warm breath and two soft drops. */
+/* All synthesised, built on the envelope's voices in convert-card. The ice sounds are noise only:
+   freeze is a crunch as the ice grips, a fizz of crystallisation and a few sharp cracks; thaw is the
+   grip letting go, soft and fading. The card's press and release keep the envelope's grab and boing. */
 
 const VOLUME = .8, note = (i: number) => 440 * 2 ** ((72 + 12 * (i / 5 | 0) + [0, 2, 4, 7, 9][i % 5] - 69) / 12);
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
@@ -38,48 +38,39 @@ function voices(ctx: AudioContext) {
     env(g.gain, at, gain, attack, dur);
     o.connect(g).connect(p); out(p, send); o.start(at); o.stop(at + dur + .02);
   }
-  // the sound of something being gripped by ice, drawn sample by sample so it can be dense and fine
+  /* ice, from noise alone (no tones: tones read as sci-fi). Each grain is a few ms of noise; how many,
+     how loud and how dark they are is what turns them into fizz, crunch or a crack */
   function iceBuffer(T: number, kind: "freeze" | "thaw") {
     const b = ctx.createBuffer(2, T * sr | 0, sr), L = b.getChannelData(0), R = b.getChannelData(1);
-    const put = (i: number, v: number, pan: number) => { if (i < 0 || i >= L.length) return; L[i] += v * (1 - pan) * .5 * 2 ** .5; R[i] += v * (1 + pan) * .5 * 2 ** .5; };
-    // crystallisation: a fizz of tiny clicks, thickening as the ice spreads, then thinning as it sets
-    const rate = (t: number) => kind === "freeze" ? 520 * Math.sin(Math.PI * Math.min(1, t / (T * .9))) ** 1.4 : 160 * Math.sin(Math.PI * Math.min(1, t / T)) * Math.exp(-t / .7);
-    for (let t = 0; t < T; t += 1 / sr * 64) {
-      let n = rate(t) * 64 / sr;
-      while (n > 0) { if (Math.random() < n) {
-        const at = (t * sr + Math.random() * 64) | 0, len = 6 + Math.random() * 50 | 0, amp = Math.random() ** 2.6 * .5, pan = rand(-.9, .9);
-        let prev = 0;
-        for (let k = 0; k < len; k++) { const x = (Math.random() * 2 - 1) * Math.exp(-k / len * 5); put(at + k, (x - prev * .7) * amp, pan); prev = x; }
-      } n -= 1; }
-    }
-    // tiny ringing pops: bubbles in the ice giving way
-    const pops = kind === "freeze" ? 30 : 0;
-    for (let n = 0; n < pops; n++) {
-      const at = (kind === "freeze" ? T * Math.random() ** .8 : .5 * Math.random()) * sr | 0, f = rand(2800, 9000), d = rand(.01, .04) * sr, amp = rand(.05, .16), pan = rand(-.8, .8);
-      for (let k = 0; k < d * 4; k++) put(at + k, Math.sin(2 * Math.PI * f * k / sr) * Math.exp(-k / d) * amp, pan);
-    }
-    // creak: stick-slip, the clicks crowding together as the ice tightens round the card
-    const creak = (from: number, len: number, gap0: number, gap1: number, amp: number, pan: number) => {
-      for (let t = 0; t < len;) {
-        const u = t / len, at = (from + t) * sr | 0, f = rand(650, 1150), a = amp * Math.sin(Math.PI * u) ** .7 * rand(.6, 1);
-        for (let k = 0; k < .006 * sr; k++) put(at + k, Math.sin(2 * Math.PI * f * k / sr) * Math.exp(-k / (.0012 * sr)) * a, pan);
-        t += (gap0 + (gap1 - gap0) * u) * rand(.7, 1.3);
+    const grain = (at: number, len: number, amp: number, pan: number, dark: number) => {
+      // dark 0: bright click (differentiated noise); dark near 1: a duller, lower crunch (smoothed noise)
+      let lp = 0, prev = 0;
+      const gl = Math.cos((pan + 1) * Math.PI / 4), gr = Math.sin((pan + 1) * Math.PI / 4);
+      for (let k = 0; k < len; k++) {
+        const i = at + k; if (i < 0 || i >= L.length) break;
+        const x = (Math.random() * 2 - 1) * Math.exp(-k / len * 5);
+        lp += (x - lp) * (1 - dark); const y = dark ? lp : x - prev * .8; prev = x;
+        L[i] += y * amp * gl; R[i] += y * amp * gr;
       }
     };
-    // pew: the singing of ice under tension, high frequencies arriving first, the rest sliding down after
-    const pew = (at: number, f0: number, amp: number, pan: number) => {
-      let ph = 0;
-      for (let k = 0; k < .45 * sr; k++) { const t = k / sr, f = 180 + f0 * Math.exp(-t / .03); ph += 2 * Math.PI * f / sr; put((at * sr | 0) + k, Math.sin(ph) * Math.exp(-t / .13) * amp * Math.min(1, t / .002), pan); }
-    };
-    // glass: a thin inharmonic ping when the ice has closed
-    const glass = (at: number, f: number, amp: number) => {
-      for (const [ratio, lvl, life] of [[1, 1, .7], [2.76, .45, .35], [5.4, .22, .18], [8.93, .1, .1]]) for (let k = 0; k < life * 3 * sr; k++) put((at * sr | 0) + k, Math.sin(2 * Math.PI * f * ratio * k / sr) * Math.exp(-k / (life * sr)) * lvl * amp, 0);
-    };
+    const at = (s: number) => s * sr | 0;
     if (kind === "freeze") {
-      creak(.05, .7, .02, .006, .22, -.3);
-      creak(1.45, .35, .012, .005, .14, .4);
-      pew(.4, rand(3200, 4200), .1, rand(-.5, .5)); pew(1.15, rand(2600, 3600), .08, rand(-.5, .5)); pew(2.05, rand(3800, 4800), .06, rand(-.5, .5));
-      glass(T - .6, rand(1900, 2300), .05);
+      // crunch: the first grip, ice packing tight round the card as it squats
+      for (let n = 0; n < 160; n++) { const t = .05 + .55 * Math.random() ** 1.5; grain(at(t), 60 + Math.random() * 380 | 0, Math.random() ** 2 * .5, rand(-.5, .5), rand(.75, .92)); }
+      // crystallisation: a fine fizz that swells as the frost spreads and thins as it sets
+      for (let t = .35; t < T; t += 1 / 900) {
+        const d = Math.sin(Math.PI * Math.min(1, (t - .35) / (T - .45))) ** 1.3;
+        if (Math.random() < d * .55) grain(at(t), 4 + Math.random() * 40 | 0, Math.random() ** 2.6 * .45 * d, rand(-.9, .9), 0);
+      }
+      // cracks: a handful of sharp, louder snaps as the ice tightens
+      for (let n = 0; n < 9; n++) { const t = rand(.55, T - .4); grain(at(t), 120 + Math.random() * 500 | 0, rand(.35, .7), rand(-.7, .7), rand(0, .35)); grain(at(t + .004), 400, rand(.1, .2), 0, .9); }
+    } else {
+      // the grip letting go: soft, sparse crackle that fades, with a little dull slush
+      for (let t = 0; t < T; t += 1 / 600) {
+        const d = Math.exp(-t / .55) * Math.min(1, t / .08);
+        if (Math.random() < d * .4) grain(at(t), 6 + Math.random() * 30 | 0, Math.random() ** 2.6 * .3, rand(-.8, .8), 0);
+        if (Math.random() < d * .08) grain(at(t), 200 + Math.random() * 400 | 0, Math.random() ** 2 * .18, rand(-.5, .5), rand(.85, .95));
+      }
     }
     return b;
   }
@@ -87,18 +78,10 @@ function voices(ctx: AudioContext) {
 
   return {
     ctx,
-    freeze() {
-      const at = now();
-      play(iceBuffer(3.2, "freeze"), .55);
-      air({ at, type: "highpass", from: 5000, to: 8000, Q: .5, gain: .02, attack: 1.2, dur: 2.6, send: .6 });   // the cold settling in
-    },
-    thaw() {   // quiet: the ice loosening its grip as the warm wave rises, then two soft drops
-      const at = now();
-      play(iceBuffer(1.8, "thaw"), .4, .6);
-      air({ at: at + .3, type: "lowpass", from: 300, to: 900, Q: .4, gain: .035, attack: .6, dur: 1.4, send: .5 });
-      coo(rand(560, 640), [[0, 1], [.05, 1.6]], { at: at + 1.3, gain: .03, wave: "sine", send: .7, pan: -.3 });
-      coo(rand(700, 780), [[0, 1], [.05, 1.6]], { at: at + 1.75, gain: .022, wave: "sine", send: .8, pan: .35 });
-    },
+    freeze() { play(iceBuffer(3.2, "freeze"), .3); },
+    thaw() { play(iceBuffer(1.8, "thaw"), .3, .8); air({ at: now() + .4, type: "lowpass", from: 260, to: 700, Q: .3, gain: .03, attack: .5, dur: 1.2, send: .3 }); },
+    // the push as the card springs up: a short, low, dull thud of noise
+    thump() { air({ type: "lowpass", from: 320, to: 70, Q: .8, gain: .35, attack: .003, dur: .16, send: .1 }); },
     grab() { air({ buffer: foil, from: 3000, to: 2200, Q: .7, gain: .3, attack: .003, dur: .09 }); },
     boing() { coo(340, [[0, .8], [.05, 1.6], [.12, .85], [.2, 1.25], [.3, 1]], { gain: .12, send: .2 }); },
     arrive() { const at = now(); air({ at, from: 900, to: 2600, gain: .06, attack: .3, dur: .75, send: .4, pan: [.7, 0] }); coo(note(3), [[0, .9], [.05, 1.03]], { at: at + .78, gain: .05 }); coo(note(5), [[0, .9], [.06, 1.03]], { at: at + .87, gain: .05 }); },

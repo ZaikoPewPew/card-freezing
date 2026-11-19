@@ -13,9 +13,11 @@ class Spring {
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
+const GATHER = .5;   // the vertical wave's anticipation, in seconds
+
 /* both views hold a copy of the card; one loop moves them together, so the wave never shows a jump */
 function useCardMotion(frozen: boolean) {
-  const api = useRef({ press: (_on: boolean) => {}, frozen });
+  const api = useRef({ press: (_on: boolean) => {}, kick: () => {}, frozen });
   api.current.frozen = frozen;
 
   useEffect(() => {
@@ -23,11 +25,15 @@ function useCardMotion(frozen: boolean) {
     const P = { x: new Spring(0, .7, .28), y: new Spring(0, .7, .28), rx: new Spring(0, .7, .28), ry: new Spring(0, .7, .28), rz: new Spring(0, .7, .28) };
     const squeeze = new Spring(0, .3, .45);
     const pointer = { x: innerWidth / 2, y: innerHeight / 2, in: false };
-    let t = 0, last = performance.now(), nudgeAt = 5, held = false, wasFrozen = api.current.frozen, raf = 0;
+    let t = 0, last = performance.now(), nudgeAt = 5, held = false, gather = 0, wasFrozen = api.current.frozen, raf = 0;
     if (!reduce) { P.x.x = innerWidth * .62; P.y.x = -50; P.ry.x = -200; P.rz.x = 16; }   // flies in from the right, spinning round to its front
     addEventListener("pointerdown", wake, true); addEventListener("keydown", wake, true);
 
     api.current.press = on => { if (on === held) return; held = on; if (on) sfx.grab(); else { sfx.boing(); if (motion) P.rz.v += (Math.random() < .5 ? -1 : 1) * 40; } };
+
+    // the wave breathes in toward the button for half a second before it launches: the card squats with it,
+    // then springs up as the wave leaves. A plain transform of the whole card, so the art stays crisp
+    api.current.kick = () => { if (!motion) return; gather = t + GATHER; };
 
     const track = (e: PointerEvent) => { pointer.x = e.clientX; pointer.y = e.clientY; pointer.in = true; };
     const leave = () => { pointer.in = false; };
@@ -43,7 +49,8 @@ function useCardMotion(frozen: boolean) {
 
       const nx = pointer.in ? clamp(pointer.x / innerWidth * 2 - 1, -1, 1) : 0, ny = pointer.in ? clamp(pointer.y / innerHeight * 2 - 1, -1, 1) : 0;
       const tilt = (cold ? .35 : 1) * (reduce ? .5 : 1);
-      squeeze.to = held ? motion : 0;
+      if (gather && t >= gather) { gather = 0; squeeze.v -= 14; P.y.v -= 260; P.rz.v += (Math.random() < .5 ? -1 : 1) * 50; sfx.thump(); }
+      squeeze.to = gather ? 1.5 : held ? motion : 0;
       P.x.to = 0;
       P.y.to = Math.sin(t * 1.4) * (cold ? 2 : 7) * motion;
       P.ry.to = nx * 22 * tilt; P.rx.to = -ny * 16 * tilt - squeeze.x * 6;
@@ -110,7 +117,7 @@ function Ice({ state }: { state: IceState }) {
   );
 }
 
-const THAW_MS = 2600;   // the wipe's delay plus its length; then the ice is cleared away
+const THAW_MS = 3600;   // the wipe's delay plus its length; then the ice is cleared away
 
 export function App() {
   const [frozen, setFrozen] = useState(false);
@@ -118,16 +125,41 @@ export function App() {
   const button = useRef<HTMLButtonElement>(null), wave = useRef<DistortionWaveHandle>(null), thawing = useRef(0);
   const motion = useCardMotion(frozen);
 
+  /* the ice edge rides the wave's leading edge: each frame it is read off the wave itself
+     (front.radius: how far the front has come from its source, in the wave's points) */
+  const ride = useRef(0);
+  const follow = (freezing: boolean) => {
+    cancelAnimationFrame(ride.current);
+    const iceEl = document.querySelector<HTMLElement>(".ice"), c = wave.current?.controller as unknown as {
+      front?: { oy: number; radius: number; clearRadius: number; launched: boolean }; geom?: { H: number } | null } | null;
+    if (!iceEl) return;
+    const set = (k: string, v: number) => iceEl.style.setProperty(k, v.toFixed(4));
+    if (freezing) { set("--a", 0); set("--b", 0); } else { set("--a", 1.2); set("--b", 0); }
+    const t0 = performance.now();
+    let armed = false;   // the front still holds the last run until this one starts; wait for it to reset
+    const tick = (now: number) => {
+      const f = c?.front, H = c?.geom?.H;
+      let edge = 0;
+      if (f && !f.launched) armed = true;
+      if (f && H && armed && f.launched) edge = (H - (f.oy - (f.radius - .15 * Math.max(0, f.radius - Math.max(0, f.clearRadius))))) / H;
+      set(freezing ? "--a" : "--b", Math.min(1.2, Math.max(0, edge)));
+      if (now - t0 < 4200 && (!armed || edge < 1.2)) ride.current = requestAnimationFrame(tick);
+      else set(freezing ? "--a" : "--b", 1.2);
+    };
+    ride.current = requestAnimationFrame(tick);
+  };
+
   const toggle = () => {
     const next = !frozen;
     clearTimeout(thawing.current);
+    motion.current.kick();
     sfx[next ? "freeze" : "thaw"]();
     setFrozen(next); setIce(next ? "on" : "off");
     if (!next) thawing.current = window.setTimeout(() => setIce("none"), THAW_MS);
   };
   // the wave plays once the palette for this direction is in place
   const first = useRef(true);
-  useEffect(() => { if (first.current) { first.current = false; return; } wave.current?.play({ source: button.current }); }, [frozen]);
+  useEffect(() => { if (first.current) { first.current = false; return; } wave.current?.play({ source: button.current }); follow(frozen); }, [frozen]);
 
   return (
     <main className={`page${frozen ? " cold" : ""}`}>
@@ -145,7 +177,7 @@ export function App() {
             capture={false}
             type="vertical"
             palette={frozen ? "ocean" : "sunset"}
-            waveStyle={{ particleCount: 28, pull: 0, inhale: 0 }}
+            waveStyle={{ particleCount: 28 }}
           >
             <div className="face">
               <img src="/card.webp" alt="" draggable={false} />
