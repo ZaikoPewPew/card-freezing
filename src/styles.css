@@ -13,6 +13,9 @@
 html,body,#root{height:100%;margin:0}
 html{overscroll-behavior:none;touch-action:manipulation}
 body{overflow:hidden;color:var(--ink);font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;-webkit-font-smoothing:antialiased;background:var(--bg)}
+/* what shows past the page itself (iPhone landscape side margins, overscroll, browser chrome tint) cools too */
+html,body{background-color:#e9e6e0;transition:background-color 1.4s ease .5s}
+html.cold,html.cold body{background-color:#d6e3f1;transition:background-color 2.6s cubic-bezier(.4,0,.2,1) .15s}
 
 /* ---------- the page: warm paper that cools to ice while the card freezes ---------- */
 .page{position:fixed;inset:0;perspective:1400px;perspective-origin:50% 50%;user-select:none;-webkit-user-select:none}

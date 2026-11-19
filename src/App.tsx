@@ -144,6 +144,11 @@ export function App() {
   const [muted, mute] = useState(isMuted);
   const button = useRef<HTMLButtonElement>(null), wave = useRef<DistortionWaveHandle>(null);
   useEffect(() => measureFlat(wave.current?.element ?? null), []);
+  // the document behind the page and the browser's own chrome follow the page from warm to cold
+  useEffect(() => {
+    document.documentElement.classList.toggle("cold", frozen);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", frozen ? "#d6e3f1" : "#e9e6e0");
+  }, [frozen]);
   const motion = useCardMotion(frozen);
 
   const [scrub, setScrub] = useState<number | null>(null), thaw = useRef(0);
