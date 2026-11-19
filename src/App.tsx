@@ -13,6 +13,7 @@ class Spring {
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
+const CARD = `${import.meta.env.BASE_URL}card.webp`;
 const GATHER = .25;
 const FREEZE_STYLE = { particleCount: 28, pull: 0, inhale: 0, anticipation: GATHER, travel: 1.7 };
 /* running back, the colour that lingers on the edges after a freeze would come first and read as the
@@ -113,7 +114,7 @@ function Frost({ frozen }: { frozen: boolean }) {
 
 const Face = ({ cold, frozen = false }: { cold?: boolean; frozen?: boolean }) => (
   <div className={`face${cold ? " ice" : ""}`}>
-    <img src="/card.webp" alt="" draggable={false} />
+    <img src={CARD} alt="" draggable={false} />
     {cold && <><i className="chill" /><Frost frozen={frozen} /></>}
     <i className="holo" /><i className="glare" /><i className="sheen" />
   </div>

@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({ plugins: [react()] });
+// relative base: the build works from any folder, including GitHub Pages' /card-freezing/
+export default defineConfig({ base: "./", plugins: [react()] });

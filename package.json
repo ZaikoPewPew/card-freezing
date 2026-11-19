@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build && git -C dist init -q -b gh-pages && git -C dist add -A && git -C dist commit -qm deploy && git -C dist push -f ../.git gh-pages:gh-pages && git push -f origin gh-pages"
   },
   "dependencies": {
     "distortion-waves": "0.1.0",
