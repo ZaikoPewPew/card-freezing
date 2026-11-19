@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type Ref } from "react";
 import { FrostGrowth } from "./frost";
 import { sfx, wake } from "./sound";
 import { DistortionWave } from "distortion-waves";
@@ -15,7 +15,7 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 const CARD = `${import.meta.env.BASE_URL}card.webp`;
 const GATHER = .25;
-const FREEZE_STYLE = { particleCount: 28, pull: 0, inhale: 0, anticipation: GATHER, travel: 1.7 };
+const FREEZE_STYLE = { particleCount: 40, pull: 0, inhale: 0, anticipation: GATHER, travel: 2.2 };
 /* running back, the colour that lingers on the edges after a freeze would come first and read as the
    edges thawing before the wave gets there: no rim or hairline on the way back */
 const THAW_STYLE = { ...FREEZE_STYLE, rimStrength: 0, hairlineOpacity: 0, returnSpeed: 1 };   // the wave's anticipation (waveStyle below), in seconds: a short, sharp gather
@@ -112,9 +112,11 @@ function Frost({ frozen }: { frozen: boolean }) {
   return <canvas ref={ref} className="frost" data-dw-live aria-hidden="true" />;
 }
 
-const Face = ({ cold, frozen = false }: { cold?: boolean; frozen?: boolean }) => (
+const Face = ({ cold, frozen = false, chip }: { cold?: boolean; frozen?: boolean; chip?: Ref<HTMLElement> }) => (
   <div className={`face${cold ? " ice" : ""}`}>
     <img src={CARD} alt="" draggable={false} />
+    {/* an invisible mark laid exactly over the chip in the art: the wave opens from here */}
+    <i className="chip-spot" ref={chip} />
     {cold && <><i className="chill" /><Frost frozen={frozen} /></>}
     <i className="holo" /><i className="glare" /><i className="sheen" />
   </div>
@@ -122,7 +124,7 @@ const Face = ({ cold, frozen = false }: { cold?: boolean; frozen?: boolean }) =>
 
 export function App() {
   const [frozen, setFrozen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
+  const button = useRef<HTMLButtonElement>(null), chip = useRef<HTMLElement>(null);
   const motion = useCardMotion(frozen);
 
   const toggle = () => {
@@ -141,19 +143,20 @@ export function App() {
           <i className="side l" /><i className="side r" /><i className="side t" /><i className="side b" />
           <div className="skin back" />
           {/* the wave runs on the face alone, inside its rounded corners. Its lens bends a picture of the
-              card from the warm face into the frozen one; revealed=false runs it back into the button.
+              card from the warm face into the frozen one, as a ring out of the chip (type center, the chip held
+              sharp); revealed=false runs it back into the chip.
               pull/inhale off: they drag the picture toward the source and tear its top edge.
               Thaw switches to the warm palette: a thaw, not more cold */}
           <DistortionWave
             className="skin front"
             revealed={frozen}
-            source={button}
-            type="vertical"
+            source={chip}
+            type="center"
             palette={frozen ? "ocean" : "sunset"}
             waveStyle={frozen ? FREEZE_STYLE : THAW_STYLE}
             revealedContent={<Face cold frozen={frozen} />}
           >
-            <Face />
+            <Face chip={chip} />
           </DistortionWave>
         </div>
       </div>
