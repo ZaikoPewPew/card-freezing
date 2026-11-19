@@ -1,6 +1,6 @@
 /* All synthesised, built on the envelope's voices in convert-card. Freeze is ice taking hold:
    a fizz of crystallisation, the creak of ice tightening, the "pew" a frozen lake sings under
-   tension and a thin glass ping as it closes. Thaw is the ice letting go and a few melting drips. */
+   tension and a thin glass ping as it closes. Thaw is quiet: the ice loosening, a warm breath and two soft drops. */
 
 const VOLUME = .8, note = (i: number) => 440 * 2 ** ((72 + 12 * (i / 5 | 0) + [0, 2, 4, 7, 9][i % 5] - 69) / 12);
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
@@ -43,7 +43,7 @@ function voices(ctx: AudioContext) {
     const b = ctx.createBuffer(2, T * sr | 0, sr), L = b.getChannelData(0), R = b.getChannelData(1);
     const put = (i: number, v: number, pan: number) => { if (i < 0 || i >= L.length) return; L[i] += v * (1 - pan) * .5 * 2 ** .5; R[i] += v * (1 + pan) * .5 * 2 ** .5; };
     // crystallisation: a fizz of tiny clicks, thickening as the ice spreads, then thinning as it sets
-    const rate = (t: number) => kind === "freeze" ? 520 * Math.sin(Math.PI * Math.min(1, t / (T * .9))) ** 1.4 : 420 * Math.exp(-t / .22);
+    const rate = (t: number) => kind === "freeze" ? 520 * Math.sin(Math.PI * Math.min(1, t / (T * .9))) ** 1.4 : 160 * Math.sin(Math.PI * Math.min(1, t / T)) * Math.exp(-t / .7);
     for (let t = 0; t < T; t += 1 / sr * 64) {
       let n = rate(t) * 64 / sr;
       while (n > 0) { if (Math.random() < n) {
@@ -53,7 +53,7 @@ function voices(ctx: AudioContext) {
       } n -= 1; }
     }
     // tiny ringing pops: bubbles in the ice giving way
-    const pops = kind === "freeze" ? 30 : 12;
+    const pops = kind === "freeze" ? 30 : 0;
     for (let n = 0; n < pops; n++) {
       const at = (kind === "freeze" ? T * Math.random() ** .8 : .5 * Math.random()) * sr | 0, f = rand(2800, 9000), d = rand(.01, .04) * sr, amp = rand(.05, .16), pan = rand(-.8, .8);
       for (let k = 0; k < d * 4; k++) put(at + k, Math.sin(2 * Math.PI * f * k / sr) * Math.exp(-k / d) * amp, pan);
@@ -80,9 +80,6 @@ function voices(ctx: AudioContext) {
       creak(1.45, .35, .012, .005, .14, .4);
       pew(.4, rand(3200, 4200), .1, rand(-.5, .5)); pew(1.15, rand(2600, 3600), .08, rand(-.5, .5)); pew(2.05, rand(3800, 4800), .06, rand(-.5, .5));
       glass(T - .6, rand(1900, 2300), .05);
-    } else {
-      creak(0, .35, .006, .018, .16, .2);
-      pew(.05, rand(2200, 3000), .06, rand(-.4, .4));
     }
     return b;
   }
@@ -95,11 +92,12 @@ function voices(ctx: AudioContext) {
       play(iceBuffer(3.2, "freeze"), .55);
       air({ at, type: "highpass", from: 5000, to: 8000, Q: .5, gain: .02, attack: 1.2, dur: 2.6, send: .6 });   // the cold settling in
     },
-    thaw() {
+    thaw() {   // quiet: the ice loosening its grip as the warm wave rises, then two soft drops
       const at = now();
-      play(iceBuffer(1.6, "thaw"), .45);
-      air({ at: at + .05, type: "lowpass", from: 400, to: 1800, Q: .6, gain: .07, attack: .35, dur: .9, send: .4 });  // warmth
-      for (let i = 0; i < 3; i++) coo(rand(520, 760), [[0, 1], [.07, 2.3]], { at: at + .45 + i * rand(.16, .24), gain: .06, wave: "sine", send: .5, pan: rand(-.6, .6) }); // drips
+      play(iceBuffer(1.8, "thaw"), .4, .6);
+      air({ at: at + .3, type: "lowpass", from: 300, to: 900, Q: .4, gain: .035, attack: .6, dur: 1.4, send: .5 });
+      coo(rand(560, 640), [[0, 1], [.05, 1.6]], { at: at + 1.3, gain: .03, wave: "sine", send: .7, pan: -.3 });
+      coo(rand(700, 780), [[0, 1], [.05, 1.6]], { at: at + 1.75, gain: .022, wave: "sine", send: .8, pan: .35 });
     },
     grab() { air({ buffer: foil, from: 3000, to: 2200, Q: .7, gain: .3, attack: .003, dur: .09 }); },
     boing() { coo(340, [[0, .8], [.05, 1.6], [.12, .85], [.2, 1.25], [.3, 1]], { gain: .12, send: .2 }); },

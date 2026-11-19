@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FrostGrowth } from "./frost";
 import { sfx, wake } from "./sound";
-import { DistortionWave } from "distortion-waves";
+import { DistortionWave, type DistortionWaveHandle } from "distortion-waves";
 
 /* ---------- springs: SwiftUI-style (response, bounce), same as the envelope in convert-card ---------- */
 class Spring {
@@ -15,7 +15,7 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 /* both views hold a copy of the card; one loop moves them together, so the wave never shows a jump */
 function useCardMotion(frozen: boolean) {
-  const api = useRef({ kick: () => {}, press: (_on: boolean) => {}, frozen });
+  const api = useRef({ press: (_on: boolean) => {}, frozen });
   api.current.frozen = frozen;
 
   useEffect(() => {
@@ -23,11 +23,10 @@ function useCardMotion(frozen: boolean) {
     const P = { x: new Spring(0, .7, .28), y: new Spring(0, .7, .28), rx: new Spring(0, .7, .28), ry: new Spring(0, .7, .28), rz: new Spring(0, .7, .28) };
     const squeeze = new Spring(0, .3, .45);
     const pointer = { x: innerWidth / 2, y: innerHeight / 2, in: false };
-    let t = 0, last = performance.now(), nudgeAt = 5, shiver = 0, held = false, wasFrozen = api.current.frozen, raf = 0;
+    let t = 0, last = performance.now(), nudgeAt = 5, held = false, wasFrozen = api.current.frozen, raf = 0;
     if (!reduce) { P.x.x = innerWidth * .62; P.y.x = -50; P.ry.x = -200; P.rz.x = 16; }   // flies in from the right, spinning round to its front
     addEventListener("pointerdown", wake, true); addEventListener("keydown", wake, true);
 
-    api.current.kick = () => { if (!motion) return; squeeze.v -= 6; P.rz.v += (Math.random() < .5 ? -1 : 1) * 60; P.y.v -= 180; };
     api.current.press = on => { if (on === held) return; held = on; if (on) sfx.grab(); else { sfx.boing(); if (motion) P.rz.v += (Math.random() < .5 ? -1 : 1) * 40; } };
 
     const track = (e: PointerEvent) => { pointer.x = e.clientX; pointer.y = e.clientY; pointer.in = true; };
@@ -39,7 +38,6 @@ function useCardMotion(frozen: boolean) {
     const frame = (now: number) => {
       const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt;
       const cold = api.current.frozen;
-      if (cold && !wasFrozen) shiver = t + .6;   // frozen solid: a short shiver, then it barely moves
       if (cold !== wasFrozen) for (const s of Object.values(P)) s.set(cold ? .9 : .7, cold ? .1 : .28);
       wasFrozen = cold;
 
@@ -49,7 +47,7 @@ function useCardMotion(frozen: boolean) {
       P.x.to = 0;
       P.y.to = Math.sin(t * 1.4) * (cold ? 2 : 7) * motion;
       P.ry.to = nx * 22 * tilt; P.rx.to = -ny * 16 * tilt - squeeze.x * 6;
-      P.rz.to = Math.sin(t * .9) * (cold ? .3 : 1.6) * motion + (t < shiver ? Math.sin(t * 70) * 1.4 * (shiver - t) / .6 : 0);
+      P.rz.to = Math.sin(t * .9) * (cold ? .3 : 1.6) * motion;
       if (!cold && !held && motion && t > nudgeAt) { P.rz.v += (Math.random() < .5 ? -1 : 1) * 70; nudgeAt = t + rand(4, 7); }   // left alone it wiggles
 
       const n = Math.ceil(dt * 240), h = dt / n;
@@ -82,41 +80,54 @@ function useCardMotion(frozen: boolean) {
   return api;
 }
 
-/* the frost canvas: sized to the card at screen resolution; it grows each time the card freezes.
-   data-dw-live lets the wave read it every frame, so the ice is already creeping in under the wave */
-function Frost({ frozen }: { frozen: boolean }) {
+/* the ice: a grey copy of the art, a cold tint and the frost canvas, all on top of the untouched PNG.
+   It sweeps up the card under the wave when it freezes and is wiped off from below when it thaws */
+type IceState = "none" | "on" | "off";
+function Ice({ state }: { state: IceState }) {
   const ref = useRef<HTMLCanvasElement>(null), growth = useRef<FrostGrowth>();
-  const was = useRef(frozen);
+  const was = useRef(state);
   useEffect(() => {
     const cv = ref.current!, g = growth.current = new FrostGrowth(cv);
     const ro = new ResizeObserver(() => {
       const d = Math.min(3, devicePixelRatio || 1), w = Math.round(cv.clientWidth * d), h = Math.round(cv.clientHeight * d);
       if (!w || (cv.width === w && cv.height === h)) return;
-      cv.width = w; cv.height = h; if (was.current) g.start(true);
+      cv.width = w; cv.height = h; if (was.current === "on") g.start(true);
     });
     ro.observe(cv);
     return () => { ro.disconnect(); g.stop(); };
   }, []);
   useEffect(() => {
-    if (frozen && !was.current) growth.current?.start();
-    if (!frozen && was.current) growth.current?.stop();
-    was.current = frozen;
-  }, [frozen]);
-  return <canvas ref={ref} className="frost" data-dw-live aria-hidden="true" />;
+    if (state === "on" && was.current !== "on") growth.current?.start();
+    if (state === "none") growth.current?.clear();
+    was.current = state;
+  }, [state]);
+  return (
+    <div className={`ice ${state}`} aria-hidden="true">
+      <img src="/card.webp" alt="" draggable={false} />
+      <i className="chill" />
+      <canvas ref={ref} className="frost" />
+    </div>
+  );
 }
 
-const Face = ({ children }: { children?: ReactNode }) => (
-  <div className="face">
-    <img src="/card.webp" alt="" draggable={false} />
-    {children}
-    <i className="holo" /><i className="glare" /><i className="sheen" />
-  </div>
-);
+const THAW_MS = 2600;   // the wipe's delay plus its length; then the ice is cleared away
 
 export function App() {
   const [frozen, setFrozen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
+  const [ice, setIce] = useState<IceState>("none");
+  const button = useRef<HTMLButtonElement>(null), wave = useRef<DistortionWaveHandle>(null), thawing = useRef(0);
   const motion = useCardMotion(frozen);
+
+  const toggle = () => {
+    const next = !frozen;
+    clearTimeout(thawing.current);
+    sfx[next ? "freeze" : "thaw"]();
+    setFrozen(next); setIce(next ? "on" : "off");
+    if (!next) thawing.current = window.setTimeout(() => setIce("none"), THAW_MS);
+  };
+  // the wave plays once the palette for this direction is in place
+  const first = useRef(true);
+  useEffect(() => { if (first.current) { first.current = false; return; } wave.current?.play({ source: button.current }); }, [frozen]);
 
   return (
     <main className={`page${frozen ? " cold" : ""}`}>
@@ -126,27 +137,25 @@ export function App() {
         <div className="card" data-card onPointerDown={e => { if (!e.button) motion.current.press(true); }}>
           <i className="side l" /><i className="side r" /><i className="side t" /><i className="side b" />
           <div className="skin back" />
-          {/* the wave runs on the face alone, inside its rounded corners */}
+          {/* the wave only lays its colour over the face, inside its rounded corners; capture off, so
+              nothing of the card itself is pulled or bent */}
           <DistortionWave
+            ref={wave}
             className="skin front"
-            revealed={frozen}
-            source={button}
+            capture={false}
             type="vertical"
-            palette="ocean"
-            waveStyle={{ particleCount: 28 }}
-            revealedContent={<Face><i className="chill" /><Frost frozen={frozen} /></Face>}
+            palette={frozen ? "ocean" : "sunset"}
+            waveStyle={{ particleCount: 28, pull: 0, inhale: 0 }}
           >
-            <Face />
+            <div className="face">
+              <img src="/card.webp" alt="" draggable={false} />
+              <Ice state={ice} />
+              <i className="holo" /><i className="glare" /><i className="sheen" />
+            </div>
           </DistortionWave>
         </div>
       </div>
-      <button
-        ref={button}
-        type="button"
-        className="action"
-        onClick={() => { motion.current.kick(); sfx[frozen ? "thaw" : "freeze"](); setFrozen(f => !f); }}
-        aria-pressed={frozen}
-      >
+      <button ref={button} type="button" className="action" onClick={toggle} aria-pressed={frozen}>
         {frozen ? "Разморозить карту" : "Заморозить карту"}
       </button>
     </main>

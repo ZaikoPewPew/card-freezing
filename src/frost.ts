@@ -1,6 +1,6 @@
 /* Frost that grows, like a window freezing on a time-lapse: first a fog creeps in from the rim,
    then feathery ice shoots out of the edges and corners, throwing side shoots at 60° as it goes,
-   and grain and small flakes settle last. Drawn at the screen's own resolution, never pixelated.
+   and a fine rime grain settles last. Drawn at the screen's own resolution, never pixelated.
 
    The whole growth is planned up front (every segment knows the moment it appears), then each
    frame only draws what has appeared since the last one, so a frame stays cheap. */
@@ -17,13 +17,12 @@ const rng = (seed: number) => () => {
 type Seg = { x0: number; y0: number; x1: number; y1: number; w: number; a: number; t: number };
 type Dot = { x: number; y: number; r: number; a: number; t: number };
 type Fog = { x: number; y: number; r: number; t: number };
-type Flake = { x: number; y: number; s: number; a0: number; a: number; t: number };
 
 function plan(w: number, h: number, seed: number) {
   const r = rng(seed), rand = (a: number, b: number) => a + r() * (b - a);
   const m = Math.min(w, h), u = m / 300;
   const edge = (x: number, y: number) => Math.min(x, w - x, y, h - y) / m;
-  const segs: Seg[] = [], dots: Dot[] = [], fog: Fog[] = [], flakes: Flake[] = [];
+  const segs: Seg[] = [], dots: Dot[] = [], fog: Fog[] = [];
 
   // fog: soft blobs hugging the rim, the corners first
   for (let n = 0; n < 260; n++) {
@@ -62,26 +61,21 @@ function plan(w: number, h: number, seed: number) {
       .15 + nearCorner * .7 + rand(0, .5), rand(70, 120));
   }
 
-  for (let n = 0; n < 26; n++) {
-    const x = rand(0, w), y = rand(0, h);
-    if (edge(x, y) > rand(.05, .26)) continue;
-    flakes.push({ x, y, s: rand(3, 8) * u, a0: rand(0, Math.PI), a: rand(.45, .8), t: rand(1.2, 2.6) });
-  }
   for (let n = 0; n < 2600; n++) {
     const x = rand(0, w), y = rand(0, h), e = edge(x, y);
-    if (r() > Math.exp(-e / .09)) continue;
-    dots.push({ x, y, r: rand(.25, .9) * u, a: rand(.15, .55), t: e * 6 + rand(.2, 1.6) });
+    if (r() > Math.exp(-e / .05)) continue;   // rime grain: fine and right against the rim
+    dots.push({ x, y, r: rand(.2, .5) * u, a: rand(.12, .4), t: e * 6 + rand(.2, 1.6) });
   }
 
   const byT = <T extends { t: number }>(a: T[]) => a.sort((p, q) => p.t - q.t);
-  return { segs: byT(segs), dots: byT(dots), fog: byT(fog), flakes: byT(flakes), u };
+  return { segs: byT(segs), dots: byT(dots), fog: byT(fog), u };
 }
 
 /* a frost that grows on one canvas: start() wipes it and plays the growth again */
 export class FrostGrowth {
   private ctx: CanvasRenderingContext2D | null;
   private p: ReturnType<typeof plan> | null = null;
-  private i = { segs: 0, dots: 0, fog: 0, flakes: 0 };
+  private i = { segs: 0, dots: 0, fog: 0 };
   private t0 = 0;
   private raf = 0;
 
@@ -92,7 +86,7 @@ export class FrostGrowth {
     const { cv, ctx } = this;
     if (!ctx || !cv.width) return;
     this.p = plan(cv.width, cv.height, (Math.random() * 2 ** 31) | 0);
-    this.i = { segs: 0, dots: 0, fog: 0, flakes: 0 };
+    this.i = { segs: 0, dots: 0, fog: 0 };
     ctx.clearRect(0, 0, cv.width, cv.height);
     if (instant) return this.draw(Infinity);
     this.t0 = performance.now();
@@ -120,17 +114,6 @@ export class FrostGrowth {
       const s = p.segs[i.segs];
       ctx.lineWidth = s.w; ctx.strokeStyle = `rgba(255,255,255,${s.a})`;
       ctx.beginPath(); ctx.moveTo(s.x0, s.y0); ctx.lineTo(s.x1, s.y1); ctx.stroke();
-    }
-    for (; i.flakes < p.flakes.length && p.flakes[i.flakes].t <= t; i.flakes++) {
-      const f = p.flakes[i.flakes];
-      ctx.lineWidth = .7 * p.u; ctx.strokeStyle = `rgba(255,255,255,${f.a})`; ctx.beginPath();
-      for (let k = 0; k < 6; k++) {
-        const a = f.a0 + k * Math.PI / 3;
-        ctx.moveTo(f.x, f.y); ctx.lineTo(f.x + Math.cos(a) * f.s, f.y + Math.sin(a) * f.s);
-        const bx = f.x + Math.cos(a) * f.s * .55, by = f.y + Math.sin(a) * f.s * .55;
-        for (const side of [-1, 1]) { const b = a + side * Math.PI / 3; ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(b) * f.s * .35, by + Math.sin(b) * f.s * .35); }
-      }
-      ctx.stroke();
     }
     ctx.shadowBlur = 0;
     for (; i.dots < p.dots.length && p.dots[i.dots].t <= t; i.dots++) {
