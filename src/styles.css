@@ -1,0 +1,102 @@
+/* palette, paper and foil taken from convert-card */
+:root{
+  --bg:#e9e6e0;--ink:#151515;--muted:#8a877f;
+  --red:#EF3124;--ice:#2f7fd6;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  --paper:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' seed='5'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1.4 .9'/></filter><rect width='200' height='200' filter='url(%23p)' opacity='.1'/></svg>");
+  --rainbow:repeating-linear-gradient(115deg,#1b2fd6 0%,#2f8bff 5%,#5fe6ff 10%,#f2fbff 13%,#ff9a3d 17%,#ff4a1c 21%,#1b2fd6 25%);
+  --glitter:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' seed='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 13 0 0 0 -8.2'/></filter><rect width='140' height='140' filter='url(%23n)'/></svg>");
+  --frost:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='.035 .06' numOctaves='4' seed='8'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 2.4 -1.1'/></filter><rect width='220' height='220' filter='url(%23f)'/></svg>");
+}
+*{box-sizing:border-box}
+html,body,#root{height:100%;margin:0}
+html{overscroll-behavior:none;touch-action:manipulation}
+body{color:var(--ink);font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;-webkit-font-smoothing:antialiased;
+  background:radial-gradient(120% 90% at 50% 40%,#f5f3ee,var(--bg) 58%,#d9d5cc) fixed}
+
+.stage{min-height:100%;display:grid;place-items:center;padding:72px 16px 32px}
+.hint{position:fixed;left:0;right:0;top:max(20px,4vh);margin:0;text-align:center;font-size:13px;color:var(--muted);letter-spacing:.02em}
+
+/* ---------- the sheet the wave crosses ---------- */
+.sheet{width:min(390px,100%);border-radius:32px;overflow:hidden;isolation:isolate;
+  box-shadow:0 1px 2px rgb(0 0 0/.05),0 30px 60px -28px rgb(40 25 10/.45)}
+.view{min-height:640px;height:100%;padding:28px 22px 112px;display:flex;flex-direction:column;gap:22px}
+.view.active{background:var(--paper) 0 0/200px 200px,#fbfaf7}
+.view.cold{background:var(--paper) 0 0/200px 200px,linear-gradient(180deg,#f2f7fc,#dfeaf6 70%,#d3e2f2)}
+
+header{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.eyebrow{margin:0;font-size:13px;color:var(--muted);letter-spacing:.02em}
+.cold .eyebrow{color:#6f8399}
+h1{margin:0;font-size:32px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.cold h1{color:#33475d}
+.pill{display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:5px 10px 5px 8px;border-radius:99px;font-size:13px;font-weight:500}
+.pill.on{background:#e6f4ea;color:#1d7a3a}
+.pill.on i{width:7px;height:7px;border-radius:50%;background:#26a148;box-shadow:0 0 0 3px rgb(38 161 72/.18)}
+.pill.ice{background:rgb(47 127 214/.12);color:var(--ice)}
+
+.rows{display:flex;flex-direction:column;border-radius:18px;background:rgb(255 255 255/.75);box-shadow:inset 0 0 0 1px rgb(0 0 0/.05)}
+.cold .rows{background:rgb(255 255 255/.55);box-shadow:inset 0 0 0 1px rgb(47 127 214/.12)}
+.row{display:flex;justify-content:space-between;gap:12px;padding:14px 16px;font-size:15px}
+.row+.row{border-top:1px solid rgb(0 0 0/.06)}
+.val{color:var(--muted)}
+.val.off{color:#7f93a8}
+.cold .row span:first-child{color:#526477}
+.note{margin:-6px 4px 0;font-size:13px;line-height:1.45;color:#6f8399}
+
+/* ---------- the card ---------- */
+.bank{perspective:900px}
+.plastic{position:relative;aspect-ratio:1.586;border-radius:18px;overflow:hidden;isolation:isolate;color:#fff;
+  transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .5s var(--ease-out);
+  background:var(--paper) 0 0/200px 200px,
+    radial-gradient(120% 90% at 85% 10%,rgb(255 255 255/.16),transparent 55%),
+    linear-gradient(135deg,#f2412f,var(--red) 45%,#c81c10);
+  box-shadow:0 1px 1px rgb(0 0 0/.12),0 18px 34px -16px rgb(150 20 10/.55)}
+.bank:hover .plastic{transition-duration:.12s}
+.holo,.glare,.glaze,.frost,.crystals{position:absolute;inset:0;border-radius:inherit;pointer-events:none}
+.holo{z-index:1;background:var(--rainbow) calc(var(--px)*1%) calc(var(--py)*1%)/400% 400%;mix-blend-mode:soft-light;opacity:calc(.08 + var(--hyp)*.3);filter:saturate(.8)}
+.holo::after{content:"";position:absolute;inset:0;border-radius:inherit;background:inherit;mask:var(--glitter) 0 0/140px 140px;filter:brightness(1.4);opacity:.5}
+.glare{z-index:1;background:radial-gradient(farthest-corner circle at calc(var(--px)*1%) calc(var(--py)*1%),rgb(255 255 255/.75),rgb(255 255 255/.06) 38%,rgb(0 0 0/.12));mix-blend-mode:soft-light;opacity:calc(.25 + var(--hyp)*.35)}
+.glaze{z-index:5;box-shadow:inset 0 0 0 1px rgb(255 255 255/.12),inset 0 2px 1.5px rgb(255 255 255/.22),inset 0 -2px 4px rgb(0 0 0/.18)}
+
+.logo{position:absolute;z-index:2;left:20px;top:18px;width:30px;fill:#fff}
+.bank-name{position:absolute;z-index:2;left:58px;top:23px;font-size:15px;font-weight:600;letter-spacing:.01em}
+.chip{position:absolute;z-index:2;left:20px;top:44%;width:42px;height:32px;border-radius:7px;
+  background:linear-gradient(90deg,transparent 30%,rgb(120 80 20/.35) 30% 32%,transparent 32% 68%,rgb(120 80 20/.35) 68% 70%,transparent 70%),
+    linear-gradient(transparent 46%,rgb(120 80 20/.35) 46% 54%,transparent 54%),linear-gradient(135deg,#f7dc93,#d3a84a 55%,#f1d185);
+  box-shadow:inset 0 0 0 1px rgb(120 80 20/.3)}
+.contactless{position:absolute;z-index:2;left:72px;top:calc(44% + 5px);width:22px;height:22px;opacity:.85}
+.pan{position:absolute;z-index:2;left:20px;bottom:18px;font-size:17px;font-weight:600;letter-spacing:.08em;font-variant-numeric:tabular-nums}
+.exp{position:absolute;z-index:2;right:20px;bottom:19px;font-size:14px;opacity:.85;font-variant-numeric:tabular-nums}
+
+/* frozen: the red drains to cold steel, frost blooms in from the edges, a few crystals catch the light */
+.frozen .plastic{color:#eef6ff;transform:none;
+  background:var(--paper) 0 0/200px 200px,
+    radial-gradient(120% 90% at 85% 10%,rgb(255 255 255/.4),transparent 55%),
+    linear-gradient(135deg,#9db7d3,#7e9cbd 45%,#5f7fa3);
+  box-shadow:0 1px 1px rgb(0 0 0/.1),0 18px 34px -16px rgb(30 70 130/.55)}
+.frozen .holo{opacity:.12}
+.frozen .glare{opacity:.35}
+.frost{z-index:3;background:var(--frost) 0 0/220px 220px;opacity:.75;
+  mask:radial-gradient(75% 85% at 50% 50%,transparent 30%,#000 95%);mix-blend-mode:screen}
+.crystals{z-index:3;background:
+  radial-gradient(1.5px 1.5px at 12% 18%,#fff,transparent),radial-gradient(2px 2px at 86% 26%,#fff,transparent),
+  radial-gradient(1.5px 1.5px at 72% 78%,#fff,transparent),radial-gradient(2px 2px at 30% 84%,#fff,transparent),
+  radial-gradient(1px 1px at 55% 12%,#fff,transparent),radial-gradient(1.5px 1.5px at 94% 64%,#fff,transparent);
+  box-shadow:inset 0 0 22px 4px rgb(255 255 255/.55)}
+.frozen .chip{filter:grayscale(.9) brightness(1.15)}
+.ice-badge{position:absolute;z-index:4;right:16px;top:16px;display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:99px;
+  font-size:12px;font-weight:600;color:#2c5f97;background:rgb(255 255 255/.8);box-shadow:0 1px 2px rgb(20 50 90/.15)}
+
+/* ---------- the button: the white chip from convert-card, stretched across the bottom ---------- */
+.action{position:absolute;left:22px;right:22px;bottom:24px;display:flex;align-items:center;justify-content:center;gap:8px;
+  font:inherit;font-size:16px;font-weight:600;padding:16px 18px;border-radius:16px;background:#fff;color:var(--ink);cursor:pointer;
+  border:1px solid rgb(0 0 0/.1);box-shadow:0 1px 2px rgb(0 0 0/.06),0 10px 24px -12px rgb(0 0 0/.25);
+  transition:background-color .3s var(--ease-out),color .3s var(--ease-out),scale .16s var(--ease-out);-webkit-tap-highlight-color:transparent}
+.action svg{color:var(--ice)}
+.action.thaw{background:var(--ink);color:#fff;border-color:transparent}
+.action.thaw svg{color:#ffb547}
+.action:active{scale:.97}
+.action:focus-visible{outline:2px solid #0a84ff;outline-offset:3px}
+
+@media (max-width:420px){.stage{padding:60px 0 0;align-items:end}.sheet{width:100%;border-radius:32px 32px 0 0}.view{min-height:calc(100svh - 60px)}}
+@media (prefers-reduced-motion:reduce){.plastic{transition:none}}
