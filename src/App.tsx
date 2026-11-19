@@ -13,7 +13,11 @@ class Spring {
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
-const GATHER = .25;   // the wave's anticipation (waveStyle below), in seconds: a short, sharp gather
+const GATHER = .25;
+const FREEZE_STYLE = { particleCount: 28, pull: 0, inhale: 0, anticipation: GATHER, travel: 1.7 };
+/* running back, the colour that lingers on the edges after a freeze would come first and read as the
+   edges thawing before the wave gets there: no rim or hairline on the way back */
+const THAW_STYLE = { ...FREEZE_STYLE, rimStrength: 0, hairlineOpacity: 0, returnSpeed: 1 };   // the wave's anticipation (waveStyle below), in seconds: a short, sharp gather
 
 /* both views hold a copy of the card; one loop moves them together, so the wave never shows a jump */
 function useCardMotion(frozen: boolean) {
@@ -31,9 +35,9 @@ function useCardMotion(frozen: boolean) {
 
     api.current.press = on => { if (on === held) return; held = on; if (on) sfx.grab(); else { sfx.boing(); if (motion) P.rz.v += (Math.random() < .5 ? -1 : 1) * 40; } };
 
-    // the wave breathes in toward the button for half a second before it launches: the card squats with it,
-    // then springs up as the wave leaves. A plain transform of the whole card, so the art stays crisp
-    api.current.kick = freezing => { if (!motion) return; gather = t + (freezing ? GATHER : .1); squeeze.set(.16, .4); };
+    // the card itself does not move with the wave: any squat or hop of it reads as the art jumping in size
+    // under the lens. Only a dull thud marks the moment the wave launches
+    api.current.kick = freezing => { gather = t + (freezing ? GATHER : .05); };
 
     const track = (e: PointerEvent) => { pointer.x = e.clientX; pointer.y = e.clientY; pointer.in = true; };
     const leave = () => { pointer.in = false; };
@@ -47,8 +51,8 @@ function useCardMotion(frozen: boolean) {
 
       const nx = pointer.in ? clamp(pointer.x / innerWidth * 2 - 1, -1, 1) : 0, ny = pointer.in ? clamp(pointer.y / innerHeight * 2 - 1, -1, 1) : 0;
       const tilt = reduce ? .5 : 1;   // the same in both states: changing it on freeze re-angled the card mid-wave
-      if (gather && t >= gather) { gather = 0; squeeze.set(.3, .45); squeeze.v -= 16; P.y.v -= 260; P.rz.v += (Math.random() < .5 ? -1 : 1) * 50; sfx.thump(); }
-      squeeze.to = gather ? 1.5 : held ? motion : 0;
+      if (gather && t >= gather) { gather = 0; sfx.thump(); }
+      squeeze.to = held ? motion : 0;
       P.x.to = 0;
       P.y.to = Math.sin(t * 1.4) * 7 * motion;
       P.ry.to = nx * 22 * tilt; P.rx.to = -ny * 16 * tilt - squeeze.x * 6;
@@ -145,7 +149,7 @@ export function App() {
             source={button}
             type="vertical"
             palette={frozen ? "ocean" : "sunset"}
-            waveStyle={{ particleCount: 28, pull: 0, inhale: 0, anticipation: GATHER, travel: 1.7, returnSpeed: 1 }}
+            waveStyle={frozen ? FREEZE_STYLE : THAW_STYLE}
             revealedContent={<Face cold frozen={frozen} />}
           >
             <Face />
