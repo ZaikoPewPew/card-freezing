@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FrostGrowth } from "./frost";
 import { sfx, wake } from "./sound";
-import { DistortionWave, type DistortionWaveHandle } from "distortion-waves";
+import { DistortionWave } from "distortion-waves";
 
 /* ---------- springs: SwiftUI-style (response, bounce), same as the envelope in convert-card ---------- */
 class Spring {
@@ -17,7 +17,7 @@ const GATHER = .5;   // the vertical wave's anticipation, in seconds
 
 /* both views hold a copy of the card; one loop moves them together, so the wave never shows a jump */
 function useCardMotion(frozen: boolean) {
-  const api = useRef({ press: (_on: boolean) => {}, kick: () => {}, frozen });
+  const api = useRef({ press: (_on: boolean) => {}, kick: (_freezing: boolean) => {}, frozen });
   api.current.frozen = frozen;
 
   useEffect(() => {
@@ -33,7 +33,7 @@ function useCardMotion(frozen: boolean) {
 
     // the wave breathes in toward the button for half a second before it launches: the card squats with it,
     // then springs up as the wave leaves. A plain transform of the whole card, so the art stays crisp
-    api.current.kick = () => { if (!motion) return; gather = t + GATHER; };
+    api.current.kick = freezing => { if (!motion) return; gather = t + (freezing ? GATHER : .12); };
 
     const track = (e: PointerEvent) => { pointer.x = e.clientX; pointer.y = e.clientY; pointer.in = true; };
     const leave = () => { pointer.in = false; };
@@ -87,79 +87,47 @@ function useCardMotion(frozen: boolean) {
   return api;
 }
 
-/* the ice: a grey copy of the art, a cold tint and the frost canvas, all on top of the untouched PNG.
-   It sweeps up the card under the wave when it freezes and is wiped off from below when it thaws */
-type IceState = "none" | "on" | "off";
-function Ice({ state }: { state: IceState }) {
+/* the frost canvas: sized to the card at screen resolution, it grows each time the card freezes.
+   data-dw-live lets the wave read it every frame, so the ice is already creeping in under the lens */
+function Frost({ frozen }: { frozen: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null), growth = useRef<FrostGrowth>();
-  const was = useRef(state);
+  const was = useRef(frozen);
   useEffect(() => {
     const cv = ref.current!, g = growth.current = new FrostGrowth(cv);
     const ro = new ResizeObserver(() => {
       const d = Math.min(3, devicePixelRatio || 1), w = Math.round(cv.clientWidth * d), h = Math.round(cv.clientHeight * d);
       if (!w || (cv.width === w && cv.height === h)) return;
-      cv.width = w; cv.height = h; if (was.current === "on") g.start(true);
+      cv.width = w; cv.height = h; if (was.current) g.start(true);
     });
     ro.observe(cv);
     return () => { ro.disconnect(); g.stop(); };
   }, []);
   useEffect(() => {
-    if (state === "on" && was.current !== "on") growth.current?.start();
-    if (state === "none") growth.current?.clear();
-    was.current = state;
-  }, [state]);
-  return (
-    <div className={`ice ${state}`} aria-hidden="true">
-      <img src="/card.webp" alt="" draggable={false} />
-      <i className="chill" />
-      <canvas ref={ref} className="frost" />
-    </div>
-  );
+    if (frozen && !was.current) growth.current?.start();
+    was.current = frozen;
+  }, [frozen]);
+  return <canvas ref={ref} className="frost" data-dw-live aria-hidden="true" />;
 }
 
-const THAW_MS = 3600;   // the wipe's delay plus its length; then the ice is cleared away
+const Face = ({ cold, frozen = false }: { cold?: boolean; frozen?: boolean }) => (
+  <div className={`face${cold ? " ice" : ""}`}>
+    <img src="/card.webp" alt="" draggable={false} />
+    {cold && <><i className="chill" /><Frost frozen={frozen} /></>}
+    <i className="holo" /><i className="glare" /><i className="sheen" />
+  </div>
+);
 
 export function App() {
   const [frozen, setFrozen] = useState(false);
-  const [ice, setIce] = useState<IceState>("none");
-  const button = useRef<HTMLButtonElement>(null), wave = useRef<DistortionWaveHandle>(null), thawing = useRef(0);
+  const button = useRef<HTMLButtonElement>(null);
   const motion = useCardMotion(frozen);
-
-  /* the ice edge rides the wave's leading edge: each frame it is read off the wave itself
-     (front.radius: how far the front has come from its source, in the wave's points) */
-  const ride = useRef(0);
-  const follow = (freezing: boolean) => {
-    cancelAnimationFrame(ride.current);
-    const iceEl = document.querySelector<HTMLElement>(".ice"), c = wave.current?.controller as unknown as {
-      front?: { oy: number; radius: number; clearRadius: number; launched: boolean }; geom?: { H: number } | null } | null;
-    if (!iceEl) return;
-    const set = (k: string, v: number) => iceEl.style.setProperty(k, v.toFixed(4));
-    if (freezing) { set("--a", 0); set("--b", 0); } else { set("--a", 1.2); set("--b", 0); }
-    const t0 = performance.now();
-    let armed = false;   // the front still holds the last run until this one starts; wait for it to reset
-    const tick = (now: number) => {
-      const f = c?.front, H = c?.geom?.H;
-      let edge = 0;
-      if (f && !f.launched) armed = true;
-      if (f && H && armed && f.launched) edge = (H - (f.oy - (f.radius - .15 * Math.max(0, f.radius - Math.max(0, f.clearRadius))))) / H;
-      set(freezing ? "--a" : "--b", Math.min(1.2, Math.max(0, edge)));
-      if (now - t0 < 4200 && (!armed || edge < 1.2)) ride.current = requestAnimationFrame(tick);
-      else set(freezing ? "--a" : "--b", 1.2);
-    };
-    ride.current = requestAnimationFrame(tick);
-  };
 
   const toggle = () => {
     const next = !frozen;
-    clearTimeout(thawing.current);
-    motion.current.kick();
+    motion.current.kick(next);
     sfx[next ? "freeze" : "thaw"]();
-    setFrozen(next); setIce(next ? "on" : "off");
-    if (!next) thawing.current = window.setTimeout(() => setIce("none"), THAW_MS);
+    setFrozen(next);
   };
-  // the wave plays once the palette for this direction is in place
-  const first = useRef(true);
-  useEffect(() => { if (first.current) { first.current = false; return; } wave.current?.play({ source: button.current }); follow(frozen); }, [frozen]);
 
   return (
     <main className={`page${frozen ? " cold" : ""}`}>
@@ -169,21 +137,20 @@ export function App() {
         <div className="card" data-card onPointerDown={e => { if (!e.button) motion.current.press(true); }}>
           <i className="side l" /><i className="side r" /><i className="side t" /><i className="side b" />
           <div className="skin back" />
-          {/* the wave only lays its colour over the face, inside its rounded corners; capture off, so
-              nothing of the card itself is pulled or bent */}
+          {/* the wave runs on the face alone, inside its rounded corners. Its lens bends a picture of the
+              card from the warm face into the frozen one; revealed=false runs it back into the button.
+              pull/inhale off: they drag the picture toward the source and tear its top edge.
+              returnSpeed below 1: the thaw pulls back slower than the default, so it reads */}
           <DistortionWave
-            ref={wave}
             className="skin front"
-            capture={false}
+            revealed={frozen}
+            source={button}
             type="vertical"
-            palette={frozen ? "ocean" : "sunset"}
-            waveStyle={{ particleCount: 28 }}
+            palette="ocean"
+            waveStyle={{ particleCount: 28, pull: 0, inhale: 0, returnSpeed: .8 }}
+            revealedContent={<Face cold frozen={frozen} />}
           >
-            <div className="face">
-              <img src="/card.webp" alt="" draggable={false} />
-              <Ice state={ice} />
-              <i className="holo" /><i className="glare" /><i className="sheen" />
-            </div>
+            <Face />
           </DistortionWave>
         </div>
       </div>

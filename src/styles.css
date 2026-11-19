@@ -38,7 +38,9 @@ body{overflow:hidden;color:var(--ink);font-family:-apple-system,"SF Pro Text",sy
 .side.b{bottom:calc(var(--d)/-2);transform:rotateX(-90deg)}
 .cold .side,.cold .skin.back{background:#8ea6c1}
 
-.face{position:relative;width:100%;height:100%;overflow:hidden;border-radius:var(--r)}
+/* each face is opaque, as the wave needs: the corners the PNG leaves clear are filled with its own colour */
+.face{position:relative;width:100%;height:100%;overflow:hidden;border-radius:var(--r);background:#e5432f}
+.face.ice{background:#8ea6c1}
 .face img{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
 .holo,.glare,.sheen,.chill,.frost{position:absolute;inset:0;border-radius:inherit;pointer-events:none}
 /* foil: rainbow follows the tilt, glitter catches it, glare sits where the light hits */
@@ -53,12 +55,6 @@ body{overflow:hidden;color:var(--ink);font-family:-apple-system,"SF Pro Text",sy
 /* frozen: the red drains to cold steel and a frost canvas (src/frost.ts) creeps in from the edges */
 .chill{z-index:1;background:linear-gradient(150deg,rgb(200 226 252/.5),rgb(70 130 200/.5))}
 canvas.frost{width:100%;height:100%}
-/* the ice layer shows between two edges that only move up, both set every frame from the wave's
-   own front (App.tsx, follow): --a draws it in from the bottom as the wave rises (freeze), --b wipes it
-   off from the bottom (thaw). A short soft edge sits just behind the front */
-.ice{position:absolute;inset:0;z-index:1;pointer-events:none;--a:0;--b:0;
-  mask:linear-gradient(to top,#000 calc(var(--a)*100% - 9%),transparent calc(var(--a)*100%)),linear-gradient(to top,transparent calc(var(--b)*100% - 9%),#000 calc(var(--b)*100%));
-  -webkit-mask-composite:source-in;mask-composite:intersect}
 .ice img{filter:grayscale(1) brightness(1.18)}
 .ice .chill,.ice canvas{position:absolute;inset:0}
 .cold .holo{opacity:calc(.08 + var(--hyp)*.12)}
