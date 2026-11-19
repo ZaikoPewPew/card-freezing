@@ -174,7 +174,6 @@ export function App() {
       <div className="scene">
         <i className="ground" data-ground />
         <div className="card" data-card onPointerDown={e => { if (!e.button) motion.current.press(true); }}>
-          <i className="side l" /><i className="side r" /><i className="side t" /><i className="side b" />
           <div className="skin back" />
           {/* the wave runs on the face alone, inside its rounded corners. Its lens bends a picture of the
               card from the warm face into the frozen one, up from the button; revealed=false runs it back down into it.

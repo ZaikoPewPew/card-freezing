@@ -3,7 +3,7 @@
   --bg:#e9e6e0;--ink:#151515;--muted:#8a877f;--ice:#2f7fd6;
   --ease-out:cubic-bezier(.23,1,.32,1);
   /* the card is the artwork's 1118:1781, its corners ~11% of the width (62px on a 559px card) */
-  --ch:min(500px,62vh,62svh,120vw);--cw:calc(var(--ch)*.6277);--r:calc(var(--cw)*.111);--d:5px;
+  --ch:min(500px,62vh,62svh,120vw);--cw:calc(var(--ch)*.6277);--r:calc(var(--cw)*.111);--d:1px;   /* front and back just apart; no drawn edge: flat strips stuck out past the round corners when tilted */
   --rainbow:repeating-linear-gradient(115deg,#1b2fd6 0%,#2f8bff 5%,#5fe6ff 10%,#f2fbff 13%,#ff9a3d 17%,#ff4a1c 21%,#1b2fd6 25%);
   /* the frozen card's foil: the same bands with the warm ones swapped for ice blues and white */
   --rainbow-ice:repeating-linear-gradient(115deg,#1b3fd6 0%,#2f8bff 5%,#7fe8ff 10%,#f4fbff 13%,#a8d8ff 17%,#4f8fe8 21%,#1b3fd6 25%);
@@ -28,20 +28,13 @@ html.cold,html.cold body{background-color:#d6e3f1;transition:background-color 2.
 .ground{position:absolute;left:50%;top:50%;width:calc(var(--cw)*1.05);height:calc(var(--cw)*.18);margin:calc(var(--ch)/2 + 18px) 0 0 calc(var(--cw)*-.525);
   border-radius:50%;background:radial-gradient(closest-side,rgb(30 25 15/.3),transparent);filter:blur(6px)}
 
-/* ---------- the card: a slab with thickness, front and back ---------- */
+/* ---------- the card: a front and a back, no drawn edge ---------- */
 .card{position:absolute;left:50%;top:50%;width:var(--cw);height:var(--ch);margin:calc(var(--ch)/-2) 0 0 calc(var(--cw)/-2);
   transform-style:preserve-3d;will-change:transform;cursor:grab;touch-action:none;--px:50;--py:50;--hyp:0;--gm:50}
 .card.held{cursor:grabbing}
 .skin{position:absolute;inset:0;border-radius:var(--r);overflow:hidden;isolation:isolate;backface-visibility:hidden;transform:translateZ(calc(var(--d)/2))}
 .skin.back{transform:rotateY(180deg) translateZ(calc(var(--d)/2));background:#dd3324;transition:background-color 1.2s ease .3s}
-.side{position:absolute;background:#b41e13;transition:background-color 1.2s ease .3s}
-.side.l,.side.r{top:var(--r);bottom:var(--r);width:var(--d)}
-.side.l{left:calc(var(--d)/-2);transform:rotateY(-90deg)}
-.side.r{right:calc(var(--d)/-2);transform:rotateY(90deg)}
-.side.t,.side.b{left:var(--r);right:var(--r);height:var(--d)}
-.side.t{top:calc(var(--d)/-2);transform:rotateX(90deg)}
-.side.b{bottom:calc(var(--d)/-2);transform:rotateX(-90deg)}
-.cold .side,.cold .skin.back{background:#8ea6c1}
+.cold .skin.back{background:#8ea6c1}
 
 /* each face is opaque, as the wave needs: the corners the PNG leaves clear are filled with its own colour */
 .face{position:relative;width:100%;height:100%;overflow:hidden;border-radius:var(--r);background:#e5432f}
