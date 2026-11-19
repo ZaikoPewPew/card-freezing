@@ -13,7 +13,7 @@ class Spring {
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
-const GATHER = .5;   // the vertical wave's anticipation, in seconds
+const GATHER = .25;   // the wave's anticipation (waveStyle below), in seconds: a short, sharp gather
 
 /* both views hold a copy of the card; one loop moves them together, so the wave never shows a jump */
 function useCardMotion(frozen: boolean) {
@@ -25,7 +25,7 @@ function useCardMotion(frozen: boolean) {
     const P = { x: new Spring(0, .7, .28), y: new Spring(0, .7, .28), rx: new Spring(0, .7, .28), ry: new Spring(0, .7, .28), rz: new Spring(0, .7, .28) };
     const squeeze = new Spring(0, .3, .45);
     const pointer = { x: innerWidth / 2, y: innerHeight / 2, in: false };
-    let t = 0, last = performance.now(), nudgeAt = 5, held = false, gather = 0, wasFrozen = api.current.frozen, raf = 0;
+    let t = 0, last = performance.now(), nudgeAt = 5, held = false, gather = 0, raf = 0;
     if (!reduce) { P.x.x = innerWidth * .62; P.y.x = -50; P.ry.x = -200; P.rz.x = 16; }   // flies in from the right, spinning round to its front
     addEventListener("pointerdown", wake, true); addEventListener("keydown", wake, true);
 
@@ -33,7 +33,7 @@ function useCardMotion(frozen: boolean) {
 
     // the wave breathes in toward the button for half a second before it launches: the card squats with it,
     // then springs up as the wave leaves. A plain transform of the whole card, so the art stays crisp
-    api.current.kick = freezing => { if (!motion) return; gather = t + (freezing ? GATHER : .12); };
+    api.current.kick = freezing => { if (!motion) return; gather = t + (freezing ? GATHER : .1); squeeze.set(.16, .4); };
 
     const track = (e: PointerEvent) => { pointer.x = e.clientX; pointer.y = e.clientY; pointer.in = true; };
     const leave = () => { pointer.in = false; };
@@ -44,17 +44,15 @@ function useCardMotion(frozen: boolean) {
     const frame = (now: number) => {
       const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt;
       const cold = api.current.frozen;
-      if (cold !== wasFrozen) for (const s of Object.values(P)) s.set(cold ? .9 : .7, cold ? .1 : .28);
-      wasFrozen = cold;
 
       const nx = pointer.in ? clamp(pointer.x / innerWidth * 2 - 1, -1, 1) : 0, ny = pointer.in ? clamp(pointer.y / innerHeight * 2 - 1, -1, 1) : 0;
-      const tilt = (cold ? .35 : 1) * (reduce ? .5 : 1);
-      if (gather && t >= gather) { gather = 0; squeeze.v -= 14; P.y.v -= 260; P.rz.v += (Math.random() < .5 ? -1 : 1) * 50; sfx.thump(); }
+      const tilt = reduce ? .5 : 1;   // the same in both states: changing it on freeze re-angled the card mid-wave
+      if (gather && t >= gather) { gather = 0; squeeze.set(.3, .45); squeeze.v -= 16; P.y.v -= 260; P.rz.v += (Math.random() < .5 ? -1 : 1) * 50; sfx.thump(); }
       squeeze.to = gather ? 1.5 : held ? motion : 0;
       P.x.to = 0;
-      P.y.to = Math.sin(t * 1.4) * (cold ? 2 : 7) * motion;
+      P.y.to = Math.sin(t * 1.4) * 7 * motion;
       P.ry.to = nx * 22 * tilt; P.rx.to = -ny * 16 * tilt - squeeze.x * 6;
-      P.rz.to = Math.sin(t * .9) * (cold ? .3 : 1.6) * motion;
+      P.rz.to = Math.sin(t * .9) * 1.6 * motion;
       if (!cold && !held && motion && t > nudgeAt) { P.rz.v += (Math.random() < .5 ? -1 : 1) * 70; nudgeAt = t + rand(4, 7); }   // left alone it wiggles
 
       const n = Math.ceil(dt * 240), h = dt / n;
@@ -140,14 +138,14 @@ export function App() {
           {/* the wave runs on the face alone, inside its rounded corners. Its lens bends a picture of the
               card from the warm face into the frozen one; revealed=false runs it back into the button.
               pull/inhale off: they drag the picture toward the source and tear its top edge.
-              returnSpeed below 1: the thaw pulls back slower than the default, so it reads */}
+              Thaw switches to the warm palette: a thaw, not more cold */}
           <DistortionWave
             className="skin front"
             revealed={frozen}
             source={button}
             type="vertical"
-            palette="ocean"
-            waveStyle={{ particleCount: 28, pull: 0, inhale: 0, returnSpeed: .8 }}
+            palette={frozen ? "ocean" : "sunset"}
+            waveStyle={{ particleCount: 28, pull: 0, inhale: 0, anticipation: GATHER, travel: 1.7, returnSpeed: 1 }}
             revealedContent={<Face cold frozen={frozen} />}
           >
             <Face />
