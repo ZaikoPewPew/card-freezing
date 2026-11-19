@@ -2,8 +2,8 @@
 :root{
   --bg:#e9e6e0;--ink:#151515;--muted:#8a877f;--ice:#2f7fd6;
   --ease-out:cubic-bezier(.23,1,.32,1);
-  /* the card is the artwork's 1118:1781, its corners ~10.7% of the width */
-  --ch:min(500px,62vh,62svh,120vw);--cw:calc(var(--ch)*.6277);--r:calc(var(--cw)*.107);--d:5px;
+  /* the card is the artwork's 1118:1781, its corners ~11% of the width (62px on a 559px card) */
+  --ch:min(500px,62vh,62svh,120vw);--cw:calc(var(--ch)*.6277);--r:calc(var(--cw)*.111);--d:5px;
   --rainbow:repeating-linear-gradient(115deg,#1b2fd6 0%,#2f8bff 5%,#5fe6ff 10%,#f2fbff 13%,#ff9a3d 17%,#ff4a1c 21%,#1b2fd6 25%);
   --glitter:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' seed='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 13 0 0 0 -8.2'/></filter><rect width='140' height='140' filter='url(%23n)'/></svg>");
 }
@@ -12,33 +12,34 @@ html,body,#root{height:100%;margin:0}
 html{overscroll-behavior:none;touch-action:manipulation}
 body{overflow:hidden;color:var(--ink);font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;-webkit-font-smoothing:antialiased;background:var(--bg)}
 
-/* ---------- the whole screen is what the wave crosses ---------- */
-.stage{position:fixed;inset:0;user-select:none;-webkit-user-select:none}
-.view{position:relative;height:100vh;height:100svh;overflow:hidden;perspective:1400px;perspective-origin:50% 50%}
-.view.warm{background:radial-gradient(120% 90% at 50% 40%,#f5f3ee,var(--bg) 58%,#d9d5cc)}
-.view.cold{background:radial-gradient(120% 90% at 50% 40%,#f4f8fc,#dfeaf5 58%,#c7d9ec)}
+/* ---------- the page: warm paper that cools to ice while the card freezes ---------- */
+.page{position:fixed;inset:0;perspective:1400px;perspective-origin:50% 50%;user-select:none;-webkit-user-select:none}
+.bg{position:absolute;inset:0;pointer-events:none}
+.bg.warm{background:radial-gradient(120% 90% at 50% 40%,#f5f3ee,var(--bg) 58%,#d9d5cc)}
+.bg.chilly{background:radial-gradient(120% 90% at 50% 40%,#f4f8fc,#dfeaf5 58%,#c7d9ec);opacity:0;transition:opacity 1.4s ease .5s}
+.cold .bg.chilly{opacity:1;transition:opacity 2.6s cubic-bezier(.4,0,.2,1) .15s}
 
 .scene{position:absolute;inset:0 0 72px;transform-style:preserve-3d}
 .ground{position:absolute;left:50%;top:50%;width:calc(var(--cw)*1.05);height:calc(var(--cw)*.18);margin:calc(var(--ch)/2 + 18px) 0 0 calc(var(--cw)*-.525);
   border-radius:50%;background:radial-gradient(closest-side,rgb(30 25 15/.3),transparent);filter:blur(6px)}
-.cold .ground{background:radial-gradient(closest-side,rgb(20 50 90/.28),transparent)}
 
 /* ---------- the card: a slab with thickness, front and back ---------- */
 .card{position:absolute;left:50%;top:50%;width:var(--cw);height:var(--ch);margin:calc(var(--ch)/-2) 0 0 calc(var(--cw)/-2);
   transform-style:preserve-3d;will-change:transform;cursor:grab;touch-action:none;--px:50;--py:50;--hyp:0;--gm:50}
 .card.held{cursor:grabbing}
 .skin{position:absolute;inset:0;border-radius:var(--r);overflow:hidden;isolation:isolate;backface-visibility:hidden;transform:translateZ(calc(var(--d)/2))}
-.skin.back{transform:rotateY(180deg) translateZ(calc(var(--d)/2));background:linear-gradient(160deg,#e9483a,#d72a1d)}
-.side{position:absolute;background:#b41e13}
+.skin.back{transform:rotateY(180deg) translateZ(calc(var(--d)/2));background:#dd3324;transition:background-color 1.2s ease .3s}
+.side{position:absolute;background:#b41e13;transition:background-color 1.2s ease .3s}
 .side.l,.side.r{top:var(--r);bottom:var(--r);width:var(--d)}
 .side.l{left:calc(var(--d)/-2);transform:rotateY(-90deg)}
 .side.r{right:calc(var(--d)/-2);transform:rotateY(90deg)}
 .side.t,.side.b{left:var(--r);right:var(--r);height:var(--d)}
 .side.t{top:calc(var(--d)/-2);transform:rotateX(90deg)}
 .side.b{bottom:calc(var(--d)/-2);transform:rotateX(-90deg)}
-.frozen .side,.frozen .skin.back{background:#7f98b4}
+.cold .side,.cold .skin.back{background:#8ea6c1}
 
-.skin img{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
+.face{position:relative;width:100%;height:100%;overflow:hidden;border-radius:var(--r)}
+.face img{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
 .holo,.glare,.sheen,.chill,.frost{position:absolute;inset:0;border-radius:inherit;pointer-events:none}
 /* foil: rainbow follows the tilt, glitter catches it, glare sits where the light hits */
 .holo{z-index:2;background:var(--rainbow) calc(var(--px)*1%) calc(var(--py)*1%)/400% 400%;mix-blend-mode:soft-light;opacity:calc(.04 + var(--hyp)*.22);filter:saturate(.7)}
@@ -50,10 +51,10 @@ body{overflow:hidden;color:var(--ink);font-family:-apple-system,"SF Pro Text",sy
 @keyframes tremble{50%{translate:1px -.6px}}
 
 /* frozen: the red drains to cold steel and a frost canvas (src/frost.ts) creeps in from the edges */
-.frozen img{filter:grayscale(1) brightness(1.18)}
+.face:has(.chill) img{filter:grayscale(1) brightness(1.18)}
 .chill{z-index:1;background:linear-gradient(150deg,rgb(200 226 252/.5),rgb(70 130 200/.5))}
 canvas.frost{z-index:1;width:100%;height:100%}
-.frozen .holo{opacity:calc(.08 + var(--hyp)*.12)}
+.face:has(.chill) .holo{opacity:calc(.08 + var(--hyp)*.12)}
 
 /* ---------- the button: the white chip from convert-card, as is ---------- */
 .action{position:absolute;left:50%;bottom:max(24px,5vh);translate:-50% 0;white-space:nowrap;font:inherit;font-size:15px;padding:12px 18px;border-radius:12px;

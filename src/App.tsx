@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { drawFrost } from "./frost";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { FrostGrowth } from "./frost";
 import { sfx, wake } from "./sound";
 import { DistortionWave } from "distortion-waves";
 
@@ -82,73 +82,73 @@ function useCardMotion(frozen: boolean) {
   return api;
 }
 
-/* the frost canvas, redrawn whenever the card changes size so it stays sharp */
-function Frost() {
-  const ref = useRef<HTMLCanvasElement>(null);
+/* the frost canvas: sized to the card at screen resolution; it grows each time the card freezes.
+   data-dw-live lets the wave read it every frame, so the ice is already creeping in under the wave */
+function Frost({ frozen }: { frozen: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null), growth = useRef<FrostGrowth>();
+  const was = useRef(frozen);
   useEffect(() => {
-    const cv = ref.current!;
+    const cv = ref.current!, g = growth.current = new FrostGrowth(cv);
     const ro = new ResizeObserver(() => {
       const d = Math.min(3, devicePixelRatio || 1), w = Math.round(cv.clientWidth * d), h = Math.round(cv.clientHeight * d);
       if (!w || (cv.width === w && cv.height === h)) return;
-      cv.width = w; cv.height = h; drawFrost(cv);
+      cv.width = w; cv.height = h; if (was.current) g.start(true);
     });
     ro.observe(cv);
-    return () => ro.disconnect();
+    return () => { ro.disconnect(); g.stop(); };
   }, []);
-  return <canvas ref={ref} className="frost" aria-hidden="true" />;
+  useEffect(() => {
+    if (frozen && !was.current) growth.current?.start();
+    if (!frozen && was.current) growth.current?.stop();
+    was.current = frozen;
+  }, [frozen]);
+  return <canvas ref={ref} className="frost" data-dw-live aria-hidden="true" />;
 }
 
-function Card({ frozen, onPress }: { frozen?: boolean; onPress: (on: boolean) => void }) {
-  return (
-    <div className="scene">
-      <i className="ground" data-ground />
-      <div className={`card${frozen ? " frozen" : ""}`} data-card onPointerDown={e => { if (!e.button) onPress(true); }}>
-        <i className="side l" /><i className="side r" /><i className="side t" /><i className="side b" />
-        <div className="skin back" />
-        <div className="skin front">
-          <img src="/card.webp" alt="" draggable={false} />
-          {frozen && <><i className="chill" /><Frost /></>}
-          <i className="holo" /><i className="glare" /><i className="sheen" />
-        </div>
-      </div>
-    </div>
-  );
-}
+const Face = ({ children }: { children?: ReactNode }) => (
+  <div className="face">
+    <img src="/card.webp" alt="" draggable={false} />
+    {children}
+    <i className="holo" /><i className="glare" /><i className="sheen" />
+  </div>
+);
 
 export function App() {
   const [frozen, setFrozen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const motion = useCardMotion(frozen);
-  const press = (on: boolean) => motion.current.press(on);
 
   return (
-    <DistortionWave
-      className="stage"
-      revealed={frozen}
-      source={button}
-      type="vertical"
-      palette="ocean"
-      waveStyle={{ particleCount: 46 }}
-      revealedContent={
-        <section className="view cold">
-          <Card frozen onPress={press} />
-        </section>
-      }
-      overlay={
-        <button
-          ref={button}
-          type="button"
-          className="action"
-          onClick={() => { motion.current.kick(); sfx[frozen ? "thaw" : "freeze"](); setFrozen(f => !f); }}
-          aria-pressed={frozen}
-        >
-          {frozen ? "Разморозить карту" : "Заморозить карту"}
-        </button>
-      }
-    >
-      <section className="view warm">
-        <Card onPress={press} />
-      </section>
-    </DistortionWave>
+    <main className={`page${frozen ? " cold" : ""}`}>
+      <i className="bg warm" /><i className="bg chilly" />
+      <div className="scene">
+        <i className="ground" data-ground />
+        <div className="card" data-card onPointerDown={e => { if (!e.button) motion.current.press(true); }}>
+          <i className="side l" /><i className="side r" /><i className="side t" /><i className="side b" />
+          <div className="skin back" />
+          {/* the wave runs on the face alone, inside its rounded corners */}
+          <DistortionWave
+            className="skin front"
+            revealed={frozen}
+            source={button}
+            type="vertical"
+            palette="ocean"
+            waveStyle={{ particleCount: 28 }}
+            revealedContent={<Face><i className="chill" /><Frost frozen={frozen} /></Face>}
+          >
+            <Face />
+          </DistortionWave>
+        </div>
+      </div>
+      <button
+        ref={button}
+        type="button"
+        className="action"
+        onClick={() => { motion.current.kick(); sfx[frozen ? "thaw" : "freeze"](); setFrozen(f => !f); }}
+        aria-pressed={frozen}
+      >
+        {frozen ? "Разморозить карту" : "Заморозить карту"}
+      </button>
+    </main>
   );
 }
